@@ -64,6 +64,16 @@ type API interface {
 	// Minimum server version: 5.6
 	GetUsersInTeam(teamId string, page int, perPage int) ([]*model.User, *model.AppError)
 
+	// GetTeamIcon gets the Team Icon.
+	//
+	// Minimum server version: 5.6
+	GetTeamIcon(teamId string) ([]byte, *model.AppError)
+
+	// SetTeamIcon sets the Team Icon.
+	//
+	// Minimum server version: 5.6
+	SetTeamIcon(teamId string, data []byte) *model.AppError
+
 	// UpdateUser updates a user.
 	UpdateUser(user *model.User) (*model.User, *model.AppError)
 
@@ -105,6 +115,11 @@ type API interface {
 
 	// GetTeamByName gets a team by its name.
 	GetTeamByName(name string) (*model.Team, *model.AppError)
+
+	// GetTeamsUnreadForUser gets the unread message and mention counts for each team to which the given user belongs.
+	//
+	// Minimum server version: 5.6
+	GetTeamsUnreadForUser(userId string) ([]*model.TeamUnread, *model.AppError)
 
 	// UpdateTeam updates a team.
 	UpdateTeam(team *model.Team) (*model.Team, *model.AppError)
@@ -259,6 +274,11 @@ type API interface {
 	// Minimum server version: 5.6
 	GetProfileImage(userId string) ([]byte, *model.AppError)
 
+	// SetProfileImage sets a user's profile image.
+	//
+	// Minimum server version: 5.6
+	SetProfileImage(userId string, data []byte) *model.AppError
+
 	// GetEmojiList returns a page of custom emoji on the system.
 	//
 	// The sortBy parameter can be: "name".
@@ -303,6 +323,40 @@ type API interface {
 	//
 	// Minimum server version: 5.6
 	GetEmojiImage(emojiId string) ([]byte, string, *model.AppError)
+
+	// UploadFile will upload a file to a channel using a multipart request, to be later attached to a post.
+	//
+	// Minimum server version: 5.6
+	UploadFile(data []byte, channelId string, filename string) (*model.FileInfo, *model.AppError)
+
+	// Plugin Section
+
+	// GetPlugins will return a list of plugin manifests for currently active plugins.
+	//
+	// Minimum server version: 5.6
+	GetPlugins() ([]*model.Manifest, *model.AppError)
+
+	// EnablePlugin will enable an plugin installed.
+	//
+	// Minimum server version: 5.6
+	EnablePlugin(id string) *model.AppError
+
+	// DisablePlugin will disable an enabled plugin.
+	//
+	// Minimum server version: 5.6
+	DisablePlugin(id string) *model.AppError
+
+	// RemovePlugin will disable and delete a plugin.
+	//
+	// Minimum server version: 5.6
+	RemovePlugin(id string) *model.AppError
+
+	// GetPluginStatus will return the status of a plugin.
+	//
+	// Minimum server version: 5.6
+	GetPluginStatus(id string) (*model.PluginStatus, *model.AppError)
+
+	// KV Store Section
 
 	// KVSet will store a key-value pair, unique per plugin.
 	KVSet(key string, value []byte) *model.AppError

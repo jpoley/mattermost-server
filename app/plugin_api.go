@@ -4,6 +4,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -105,6 +106,10 @@ func (api *PluginAPI) GetTeam(teamId string) (*model.Team, *model.AppError) {
 
 func (api *PluginAPI) GetTeamByName(name string) (*model.Team, *model.AppError) {
 	return api.app.GetTeamByName(name)
+}
+
+func (api *PluginAPI) GetTeamsUnreadForUser(userId string) ([]*model.TeamUnread, *model.AppError) {
+	return api.app.GetTeamsUnreadForUser("", userId)
 }
 
 func (api *PluginAPI) UpdateTeam(team *model.Team) (*model.Team, *model.AppError) {
@@ -385,6 +390,20 @@ func (api *PluginAPI) GetProfileImage(userId string) ([]byte, *model.AppError) {
 	return data, err
 }
 
+func (api *PluginAPI) SetProfileImage(userId string, data []byte) *model.AppError {
+	_, err := api.app.GetUser(userId)
+	if err != nil {
+		return err
+	}
+
+	fileReader := bytes.NewReader(data)
+	err = api.app.SetProfileImageFromFile(userId, fileReader)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (api *PluginAPI) GetEmojiList(sortBy string, page, perPage int) ([]*model.Emoji, *model.AppError) {
 	return api.app.GetEmojiList(page, perPage, sortBy)
 }
@@ -426,9 +445,75 @@ func (api *PluginAPI) ReadFile(path string) ([]byte, *model.AppError) {
 	return api.app.ReadFile(path)
 }
 
+func (api *PluginAPI) UploadFile(data []byte, channelId string, filename string) (*model.FileInfo, *model.AppError) {
+	return api.app.UploadFile(data, channelId, filename)
+}
+
 func (api *PluginAPI) GetEmojiImage(emojiId string) ([]byte, string, *model.AppError) {
 	return api.app.GetEmojiImage(emojiId)
 }
+
+func (api *PluginAPI) GetTeamIcon(teamId string) ([]byte, *model.AppError) {
+	team, err := api.app.GetTeam(teamId)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := api.app.GetTeamIcon(team)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (api *PluginAPI) SetTeamIcon(teamId string, data []byte) *model.AppError {
+	team, err := api.app.GetTeam(teamId)
+	if err != nil {
+		return err
+	}
+
+	fileReader := bytes.NewReader(data)
+	err = api.app.SetTeamIconFromFile(team, fileReader)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Plugin Section
+
+func (api *PluginAPI) GetPlugins() ([]*model.Manifest, *model.AppError) {
+	plugins, err := api.app.GetPlugins()
+	if err != nil {
+		return nil, err
+	}
+	var manifests []*model.Manifest
+	for _, manifest := range plugins.Active {
+		manifests = append(manifests, &manifest.Manifest)
+	}
+	for _, manifest := range plugins.Inactive {
+		manifests = append(manifests, &manifest.Manifest)
+	}
+	return manifests, nil
+}
+
+func (api *PluginAPI) EnablePlugin(id string) *model.AppError {
+	return api.app.EnablePlugin(id)
+}
+
+func (api *PluginAPI) DisablePlugin(id string) *model.AppError {
+	return api.app.DisablePlugin(id)
+}
+
+func (api *PluginAPI) RemovePlugin(id string) *model.AppError {
+	return api.app.RemovePlugin(id)
+}
+
+func (api *PluginAPI) GetPluginStatus(id string) (*model.PluginStatus, *model.AppError) {
+	return api.app.GetPluginStatus(id)
+}
+
+// KV Store Section
 
 func (api *PluginAPI) KVSet(key string, value []byte) *model.AppError {
 	return api.app.SetPluginKey(api.id, key, value)
