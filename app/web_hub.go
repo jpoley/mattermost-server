@@ -346,7 +346,10 @@ func (a *App) UpdateWebConnUserActivity(session model.Session, activityAt int64)
 }
 
 func (h *Hub) Register(webConn *WebConn) {
-	h.register <- webConn
+	select {
+	case h.register <- webConn:
+	case <-h.didStop:
+	}
 
 	if webConn.IsAuthenticated() {
 		webConn.SendHello()
@@ -362,16 +365,25 @@ func (h *Hub) Unregister(webConn *WebConn) {
 
 func (h *Hub) Broadcast(message *model.WebSocketEvent) {
 	if h != nil && h.broadcast != nil && message != nil {
-		h.broadcast <- message
+		select {
+		case h.broadcast <- message:
+		case <-h.didStop:
+		}
 	}
 }
 
 func (h *Hub) InvalidateUser(userId string) {
-	h.invalidateUser <- userId
+	select {
+	case h.invalidateUser <- userId:
+	case <-h.didStop:
+	}
 }
 
 func (h *Hub) UpdateActivity(userId, sessionToken string, activityAt int64) {
-	h.activity <- &WebConnActivityMessage{UserId: userId, SessionToken: sessionToken, ActivityAt: activityAt}
+	select {
+	case h.activity <- &WebConnActivityMessage{UserId: userId, SessionToken: sessionToken, ActivityAt: activityAt}:
+	case <-h.didStop:
+	}
 }
 
 func getGoroutineId() int {

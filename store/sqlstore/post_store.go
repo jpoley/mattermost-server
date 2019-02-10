@@ -4,7 +4,6 @@
 package sqlstore
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -118,7 +117,8 @@ func (s *SqlPostStore) Save(post *model.Post) store.StoreChannel {
 			if post.Type != model.POST_JOIN_LEAVE && post.Type != model.POST_ADD_REMOVE &&
 				post.Type != model.POST_JOIN_CHANNEL && post.Type != model.POST_LEAVE_CHANNEL &&
 				post.Type != model.POST_JOIN_TEAM && post.Type != model.POST_LEAVE_TEAM &&
-				post.Type != model.POST_ADD_TO_CHANNEL && post.Type != model.POST_REMOVE_FROM_CHANNEL {
+				post.Type != model.POST_ADD_TO_CHANNEL && post.Type != model.POST_REMOVE_FROM_CHANNEL &&
+				post.Type != model.POST_ADD_TO_TEAM && post.Type != model.POST_REMOVE_FROM_TEAM {
 				s.GetMaster().Exec("UPDATE Channels SET LastPostAt = :LastPostAt, TotalMsgCount = TotalMsgCount + 1 WHERE Id = :ChannelId", map[string]interface{}{"LastPostAt": time, "ChannelId": post.ChannelId})
 			} else {
 				// don't update TotalMsgCount for unimportant messages so that the channel isn't marked as unread
@@ -1144,19 +1144,9 @@ func (s *SqlPostStore) GetPostsCreatedAt(channelId string, time int64) store.Sto
 
 func (s *SqlPostStore) GetPostsByIds(postIds []string) store.StoreChannel {
 	return store.Do(func(result *store.StoreResult) {
-		keys := bytes.Buffer{}
-		params := make(map[string]interface{})
-		for i, postId := range postIds {
-			if keys.Len() > 0 {
-				keys.WriteString(",")
-			}
+		keys, params := MapStringsToQueryParams(postIds, "Post")
 
-			key := "Post" + strconv.Itoa(i)
-			keys.WriteString(":" + key)
-			params[key] = postId
-		}
-
-		query := `SELECT * FROM Posts WHERE Id in (` + keys.String() + `) ORDER BY CreateAt DESC`
+		query := `SELECT * FROM Posts WHERE Id IN ` + keys + ` ORDER BY CreateAt DESC`
 
 		var posts []*model.Post
 		_, err := s.GetReplica().Select(&posts, query, params)

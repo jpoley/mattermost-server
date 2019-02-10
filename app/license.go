@@ -92,10 +92,10 @@ func (a *App) SaveLicense(licenseBytes []byte) (*model.License, *model.AppError)
 	// start job server if necessary - this handles the edge case where a license file is uploaded, but the job server
 	// doesn't start until the server is restarted, which prevents the 'run job now' buttons in system console from
 	// functioning as expected
-	if *a.Config().JobSettings.RunJobs {
+	if *a.Config().JobSettings.RunJobs && a.Srv.Jobs != nil && a.Srv.Jobs.Workers != nil {
 		a.Srv.Jobs.StartWorkers()
 	}
-	if *a.Config().JobSettings.RunScheduler {
+	if *a.Config().JobSettings.RunScheduler && a.Srv.Jobs != nil && a.Srv.Jobs.Schedulers != nil {
 		a.Srv.Jobs.StartSchedulers()
 	}
 
@@ -104,8 +104,7 @@ func (a *App) SaveLicense(licenseBytes []byte) (*model.License, *model.AppError)
 
 // License returns the currently active license or nil if the application is unlicensed.
 func (a *App) License() *model.License {
-	license, _ := a.Srv.licenseValue.Load().(*model.License)
-	return license
+	return a.Srv.License()
 }
 
 func (a *App) SetLicense(license *model.License) bool {
@@ -172,10 +171,20 @@ func (a *App) RemoveLicense() *model.AppError {
 	return nil
 }
 
+func (s *Server) AddLicenseListener(listener func()) string {
+	id := model.NewId()
+	s.licenseListeners[id] = listener
+	return id
+}
+
 func (a *App) AddLicenseListener(listener func()) string {
 	id := model.NewId()
 	a.Srv.licenseListeners[id] = listener
 	return id
+}
+
+func (s *Server) RemoveLicenseListener(id string) {
+	delete(s.licenseListeners, id)
 }
 
 func (a *App) RemoveLicenseListener(id string) {
@@ -212,6 +221,8 @@ func (a *App) GetSanitizedClientLicense() map[string]string {
 	delete(sanitizedLicense, "IssuedAt")
 	delete(sanitizedLicense, "StartsAt")
 	delete(sanitizedLicense, "ExpiresAt")
+	delete(sanitizedLicense, "SkuName")
+	delete(sanitizedLicense, "SkuShortName")
 
 	return sanitizedLicense
 }

@@ -67,7 +67,7 @@ func (a *App) normalizeDomains(domains string) []string {
 func (a *App) isTeamEmailAddressAllowed(email string, allowedDomains string) bool {
 	email = strings.ToLower(email)
 	// First check per team allowedDomains, then app wide restrictions
-	for _, restriction := range []string{allowedDomains, a.Config().TeamSettings.RestrictCreationToDomains} {
+	for _, restriction := range []string{allowedDomains, *a.Config().TeamSettings.RestrictCreationToDomains} {
 		domains := a.normalizeDomains(restriction)
 		if len(domains) <= 0 {
 			continue
@@ -89,11 +89,6 @@ func (a *App) isTeamEmailAddressAllowed(email string, allowedDomains string) boo
 
 func (a *App) isTeamEmailAllowed(user *model.User, team *model.Team) bool {
 	email := strings.ToLower(user.Email)
-
-	if len(user.AuthService) > 0 && len(*user.AuthData) > 0 {
-		return true
-	}
-
 	return a.isTeamEmailAddressAllowed(email, team.AllowedDomains)
 }
 
@@ -103,7 +98,7 @@ func (a *App) UpdateTeam(team *model.Team) (*model.Team, *model.AppError) {
 		return nil, err
 	}
 
-	validDomains := a.normalizeDomains(a.Config().TeamSettings.RestrictCreationToDomains)
+	validDomains := a.normalizeDomains(*a.Config().TeamSettings.RestrictCreationToDomains)
 	if len(validDomains) > 0 {
 		for _, domain := range a.normalizeDomains(team.AllowedDomains) {
 			matched := false
@@ -461,15 +456,15 @@ func (a *App) JoinUserToTeam(team *model.Team, user *model.User, userRequestorId
 		return nil
 	}
 
-	if a.PluginsReady() {
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
 		var actor *model.User
 		if userRequestorId != "" {
 			actor, _ = a.GetUser(userRequestorId)
 		}
 
 		a.Srv.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Srv.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+			pluginContext := a.PluginContext()
+			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 				hooks.UserHasJoinedTeam(pluginContext, tm, actor)
 				return true
 			}, plugin.UserHasJoinedTeamId)
@@ -695,7 +690,7 @@ func (a *App) GetTeamUnread(teamId, userId string) (*model.TeamUnread, *model.Ap
 	for _, cu := range channelUnreads {
 		teamUnread.MentionCount += cu.MentionCount
 
-		if cu.NotifyProps["mark_unread"] != model.CHANNEL_MARK_UNREAD_MENTION {
+		if cu.NotifyProps[model.MARK_UNREAD_NOTIFY_PROP] != model.CHANNEL_MARK_UNREAD_MENTION {
 			teamUnread.MsgCount += cu.MsgCount
 		}
 	}
@@ -784,15 +779,15 @@ func (a *App) LeaveTeam(team *model.Team, user *model.User, requestorId string) 
 		return result.Err
 	}
 
-	if a.PluginsReady() {
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
 		var actor *model.User
 		if requestorId != "" {
 			actor, _ = a.GetUser(requestorId)
 		}
 
 		a.Srv.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Srv.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+			pluginContext := a.PluginContext()
+			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 				hooks.UserHasLeftTeam(pluginContext, teamMember, actor)
 				return true
 			}, plugin.UserHasLeftTeamId)
@@ -914,7 +909,7 @@ func (a *App) GetTeamsUnreadForUser(excludeTeamId string, userId string) ([]*mod
 	unreads := func(cu *model.ChannelUnread, tu *model.TeamUnread) *model.TeamUnread {
 		tu.MentionCount += cu.MentionCount
 
-		if cu.NotifyProps["mark_unread"] != model.CHANNEL_MARK_UNREAD_MENTION {
+		if cu.NotifyProps[model.MARK_UNREAD_NOTIFY_PROP] != model.CHANNEL_MARK_UNREAD_MENTION {
 			tu.MsgCount += cu.MsgCount
 		}
 
@@ -997,6 +992,20 @@ func (a *App) SoftDeleteTeam(teamId string) *model.AppError {
 
 	a.sendTeamEvent(team, model.WEBSOCKET_EVENT_DELETE_TEAM)
 
+	return nil
+}
+
+func (a *App) RestoreTeam(teamId string) *model.AppError {
+	team, err := a.GetTeam(teamId)
+	if err != nil {
+		return err
+	}
+	team.DeleteAt = 0
+	result := <-a.Srv.Store.Team().Update(team)
+	if result.Err != nil {
+		return result.Err
+	}
+	a.sendTeamEvent(team, model.WEBSOCKET_EVENT_RESTORE_TEAM)
 	return nil
 }
 

@@ -16,13 +16,14 @@ import (
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/store/sqlstore"
 	"github.com/mattermost/mattermost-server/utils"
+	"github.com/mattermost/mattermost-server/utils/fileutils"
 )
 
 func TestLoadConfig(t *testing.T) {
 	tempConfig, err := ioutil.TempFile("", "")
 	require.Nil(t, err)
 
-	input, err := ioutil.ReadFile(utils.FindConfigFile("config.json"))
+	input, err := ioutil.ReadFile(fileutils.FindConfigFile("config.json"))
 	require.Nil(t, err)
 	lines := strings.Split(string(input), "\n")
 	for i, line := range lines {
@@ -50,7 +51,7 @@ func TestConfigListener(t *testing.T) {
 
 	originalSiteName := th.App.Config().TeamSettings.SiteName
 	th.App.UpdateConfig(func(cfg *model.Config) {
-		cfg.TeamSettings.SiteName = "test123"
+		*cfg.TeamSettings.SiteName = "test123"
 	})
 
 	listenerCalled := false
@@ -59,9 +60,9 @@ func TestConfigListener(t *testing.T) {
 			t.Fatal("listener called twice")
 		}
 
-		if oldConfig.TeamSettings.SiteName != "test123" {
+		if *oldConfig.TeamSettings.SiteName != "test123" {
 			t.Fatal("old config contains incorrect site name")
-		} else if newConfig.TeamSettings.SiteName != originalSiteName {
+		} else if *newConfig.TeamSettings.SiteName != *originalSiteName {
 			t.Fatal("new config contains incorrect site name")
 		}
 

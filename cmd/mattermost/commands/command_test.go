@@ -4,20 +4,21 @@
 package commands
 
 import (
-	"os"
-	"os/exec"
 	"testing"
 
-	"github.com/mattermost/mattermost-server/api4"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCreateCommand(t *testing.T) {
-	th := api4.Setup().InitBasic()
-	th.InitSystemAdmin()
+	th := Setup().InitBasic()
 	defer th.TearDown()
+
+	config := th.Config()
+	*config.ServiceSettings.EnableCommands = true
+	th.SetConfig(config)
+
 	team := th.BasicTeam
 	adminUser := th.TeamAdminUser
 	user := th.BasicUser
@@ -109,13 +110,9 @@ func TestCreateCommand(t *testing.T) {
 		},
 	}
 
-	path, err := os.Executable()
-	require.NoError(t, err)
-
 	for _, testCase := range testCases {
 		t.Run(testCase.Description, func(t *testing.T) {
-
-			actual, _ := exec.Command(path, execArgs(t, testCase.Args)...).CombinedOutput()
+			actual, _ := th.RunCommandWithOutput(t, testCase.Args...)
 
 			cmds, _ := th.SystemAdminClient.ListCommands(team.Id, true)
 
@@ -134,33 +131,86 @@ func TestCreateCommand(t *testing.T) {
 	}
 }
 
+func TestShowCommand(t *testing.T) {
+	th := Setup().InitBasic()
+	defer th.TearDown()
+
+	url := "http://localhost:8000/test-command"
+	team := th.BasicTeam
+	user := th.BasicUser
+	th.LinkUserToTeam(user, team)
+	trigger := "trigger_" + model.NewId()
+	displayName := "dn_" + model.NewId()
+
+	c := &model.Command{
+		DisplayName: displayName,
+		Method:      "G",
+		TeamId:      team.Id,
+		Username:    user.Username,
+		CreatorId:   user.Id,
+		URL:         url,
+		Trigger:     trigger,
+	}
+
+	t.Run("existing command", func(t *testing.T) {
+		command, err := th.App.CreateCommand(c)
+		require.Nil(t, err)
+		commands, err := th.App.ListTeamCommands(team.Id)
+		require.Nil(t, err)
+		assert.Equal(t, len(commands), 1)
+
+		output := th.CheckCommand(t, "command", "show", command.Id)
+		assert.Contains(t, string(output), command.Id)
+		assert.Contains(t, string(output), command.TeamId)
+		assert.Contains(t, string(output), trigger)
+		assert.Contains(t, string(output), displayName)
+		assert.Contains(t, string(output), user.Username)
+	})
+
+	t.Run("not existing command", func(t *testing.T) {
+		assert.Error(t, th.RunCommand(t, "command", "show", "invalid"))
+	})
+
+	t.Run("no commandID", func(t *testing.T) {
+		assert.Error(t, th.RunCommand(t, "command", "show"))
+	})
+}
+
 func TestDeleteCommand(t *testing.T) {
-	th := api4.Setup().InitBasic()
+	// Skipped due to v5.6 RC build issues.
+	t.Skip()
+
+	th := Setup().InitBasic()
 	defer th.TearDown()
 	url := "http://localhost:8000/test-command"
 	team := th.BasicTeam
 	user := th.BasicUser
 	th.LinkUserToTeam(user, team)
 
-	// Check the appropriate permissions are enforced.
-	defaultRolePermissions := th.SaveDefaultRolePermissions()
-	defer func() {
-		th.RestoreDefaultRolePermissions(defaultRolePermissions)
-	}()
-	id := model.NewId()
 	c := &model.Command{
-		DisplayName: "dn_" + id,
+		DisplayName: "dn_" + model.NewId(),
 		Method:      "G",
 		TeamId:      team.Id,
 		Username:    user.Username,
+		CreatorId:   user.Id,
 		URL:         url,
-		Trigger:     "test",
+		Trigger:     "trigger_" + model.NewId(),
 	}
-	th.AddPermissionToRole(model.PERMISSION_MANAGE_SLASH_COMMANDS.Id, model.TEAM_USER_ROLE_ID)
-	command, _ := th.Client.CreateCommand(c)
-	commands, _ := th.Client.ListCommands(team.Id, true)
-	assert.Equal(t, len(commands), 1)
-	CheckCommand(t, "command", "delete", command.Id)
-	commands, _ = th.Client.ListCommands(team.Id, true)
-	assert.Equal(t, len(commands), 0)
+
+	t.Run("existing command", func(t *testing.T) {
+		command, err := th.App.CreateCommand(c)
+		require.Nil(t, err)
+		commands, err := th.App.ListTeamCommands(team.Id)
+		require.Nil(t, err)
+		assert.Equal(t, len(commands), 1)
+
+		th.CheckCommand(t, "command", "delete", command.Id)
+		commands, err = th.App.ListTeamCommands(team.Id)
+		require.Nil(t, err)
+		assert.Equal(t, len(commands), 0)
+	})
+
+	t.Run("not existing command", func(t *testing.T) {
+		assert.Error(t, th.RunCommand(t, "command", "delete", "invalid"))
+	})
 }

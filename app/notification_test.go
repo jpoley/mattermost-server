@@ -41,7 +41,7 @@ func TestSendNotifications(t *testing.T) {
 		t.Fatal("user should have been mentioned")
 	}
 
-	dm, err := th.App.CreateDirectChannel(th.BasicUser.Id, th.BasicUser2.Id)
+	dm, err := th.App.GetOrCreateDirectChannel(th.BasicUser.Id, th.BasicUser2.Id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -528,6 +528,20 @@ func TestGetExplicitMentions(t *testing.T) {
 					id2: true,
 				},
 				HereMentioned: true,
+			},
+		},
+		"Name on keywords is a prefix of a mention": {
+			Message:  "@other @test-two",
+			Keywords: map[string][]string{"@test": {model.NewId()}},
+			Expected: &ExplicitMentions{
+				OtherPotentialMentions: []string{"other", "test-two"},
+			},
+		},
+		"Name on mentions is a prefix of other mention": {
+			Message:  "@other-one @other @other-two",
+			Keywords: nil,
+			Expected: &ExplicitMentions{
+				OtherPotentialMentions: []string{"other-one", "other", "other-two"},
 			},
 		},
 	} {
